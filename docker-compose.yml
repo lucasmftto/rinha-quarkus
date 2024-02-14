@@ -1,0 +1,89 @@
+version: "3.5"
+
+services:
+  quarkus-api01: &quarkus-api
+    # Lembre-se de que seu serviço HTTP deve estar hospedado num repositório
+    # publicamente acessível! Ex.: hub.docker.com
+    build:
+      context: .
+      dockerfile: ./src/main/docker/Dockerfile.native
+    hostname: quarkus-api01
+    environment:
+      - DB_HOSTNAME=quarkus-db
+      - QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://quarkus-db:5432/rinha
+      - QUARKUS_DATASOURCE_USERNAME=admin
+      - QUARKUS_DATASOURCE_PASSWORD=123
+
+    # Não é necessário expor qualquer porta além da porta do load balancer,
+    # mas é comum as pessoas o fazerem para testarem suas APIs e conectarem
+    # ao banco de dados na fase de desenvolvimento.
+    ports:
+      - "8081:8080"
+    depends_on:
+      - quarkus-db
+    deploy:
+      resources:
+        limits:
+          cpus: "0.6"
+          memory: "220MB"
+
+  quarkus-api02:
+    # Essa sintaxe reusa o que foi declarado em 'api01'.
+    <<: *quarkus-api
+    hostname: quarkus-api02
+    environment:
+      - DB_HOSTNAME=quarkus-db
+      - QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://quarkus-db:5432/rinha
+      - QUARKUS_DATASOURCE_USERNAME=admin
+      - QUARKUS_DATASOURCE_PASSWORD=123
+    ports:
+      - "8082:8080"
+
+  quarkus-nginx:
+    image: nginx:1.21-alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - quarkus-api01
+      - quarkus-api02
+    ports:
+      # Obrigatório expor/usar a porta 9999 no load balancer!
+      - "9999:9999"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.17"
+          memory: "10MB"
+
+  quarkus-db:
+    build: postgres
+    image: postgres
+    hostname: quarkus-db
+    environment:
+      - POSTGRES_PASSWORD=123
+      - POSTGRES_USER=admin
+      - POSTGRES_DB=rinha
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./script.sql:/docker-entrypoint-initdb.d/script.sql
+    deploy:
+      resources:
+        limits:
+          # Note que a soma de todos os limites dos serviços
+          # aqui declarados é de 1.5 unidades de CPU e 550MB
+          # de memória. A distribuição feita aqui é apenas
+          # um exemplo – distribua como quiser.
+          cpus: "0.13"
+          memory: "100MB"
+
+# O uso do modo `bridge` deve ser adequado à carga que será usada no teste.
+# A edição anterior se beneficiou do modo host pois o volume de requisições
+# era relativamente alto e a virtualização da rede se tornou um gargalo, mas
+# este modo é mais complexo de ser configurado. Fique à vontade para usar o
+# modo que quiser desde que não conflite com portas trivialmente usadas em um
+# SO.
+networks:
+  default:
+    driver: bridge
+    name: quarkus-rinha-nginx-2024q1
