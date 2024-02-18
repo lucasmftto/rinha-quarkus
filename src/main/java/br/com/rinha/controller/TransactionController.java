@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Path("/clientes")
-//@RunOnVirtualThread
+@RunOnVirtualThread
 public class TransactionController {
 
     private void log() {
